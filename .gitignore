@@ -1,0 +1,16 @@
+node_modules/
+dist/
+release/
+test-results/
+playwright-report/
+coverage/
+.DS_Store
+.env*
+*.pdf
+*.csv
+!tests/fixtures/header.csv
+!tests/fixtures/synthetic.csv
+private/
+tmp/
+outputs/
+*.log
