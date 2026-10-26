@@ -36,6 +36,7 @@ nameFirst;nameMiddle;nameLast;nameSuffix;nameNickname;maritalStatus;gender;anoin
 ## Serialização
 
 - UTF-8 sem BOM; delimitador `;`; quebra de linha LF (`\n`).
+- Não acrescenta LF ao final do arquivo, conforme os bytes do modelo original.
 - Cabeçalho com exatamente 24 posições e sem separador extra.
 - Linha de dados: 24 posições de cadastro **mais uma posição terminal vazia**. O separador adicional não é uma coluna de cadastro. Se `notes` estiver vazio, os separadores finais refletem tanto `notes` quanto o terminador.
 - Na importação, uma 25ª posição só é aceita quando vazia. Conteúdo nessa posição é erro; não há truncamento silencioso.

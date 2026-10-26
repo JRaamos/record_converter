@@ -17,7 +17,7 @@ As páginas da mesma pessoa são consolidadas quando a identidade é suficientem
 
 ## Desenvolvimento
 
-Requisitos: Node.js 22 e npm. Windows 10/11 x64 para gerar e testar a distribuição Windows; macOS/Linux podem executar desenvolvimento e testes de lógica/interface. O usuário final **não precisa instalar Node.js**.
+Requisitos: Node.js 22.12 ou superior e npm. Windows 10/11 x64 para gerar e testar a distribuição Windows; macOS/Linux podem executar desenvolvimento e testes de lógica/interface. O usuário final **não precisa instalar Node.js**.
 
 ```sh
 npm ci
@@ -42,6 +42,7 @@ No Windows, execute `pwsh ./scripts/windows-smoke.ps1` após gerar os executáve
 ## Compatibilidade e limites
 
 - Windows 10/11 x64. Funciona offline depois da instalação.
+- PDFs e CSVs de até 50 MB; até duas leituras simultâneas, com limite de 60 segundos por PDF. Pastas inacessíveis são sinalizadas; links simbólicos não são percorridos.
 - Formulários S-21 com campos reconhecidos, incluindo widgets interativos sem árvore AcroForm. PDFs digitalizados, formulários achatados, protegidos ou com campos desconhecidos podem exigir outro arquivo.
 - O cabeçalho mantém **24 posições**, inclusive as duas `emailMain`. Cada linha de dados mantém o campo vazio terminal do modelo original; UTF-8 sem BOM, delimitador `;` e LF.
 - `anointedOtherSheep` permanece vazio em novos cadastros: o modelo não comprova os códigos aceitos. A seleção do PDF fica disponível internamente para revisão. Valores de CSV já existente são preservados.

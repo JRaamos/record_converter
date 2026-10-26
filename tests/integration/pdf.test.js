@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFHexString } from 'pdf-lib';
 import { syntheticPdf } from '../fixtures/s21.js';
 import { extractPdf } from '../../electron/services/pdf.js';
 import { parseCsv, serializeCsv } from '../../electron/services/csv.js';
@@ -7,6 +7,24 @@ import { consolidateRecords } from '../../electron/services/consolidate.js';
 import { validateRecord } from '../../shared/validation.js';
 
 describe('formulário S-21 sintético', () => {
+  it.each([[1, 0, 'Nome Visível Diferente'], [2, 9, '01/01/1990'], [5, 19, '01/01/2010'], [10, 21, true]])('exige revisão de widget %s desconectado do AcroForm homônimo', async (number, column, value) => {
+    const document = await PDFDocument.load(await syntheticPdf());
+    const text = number !== 10;
+    const name = `900_${number}_${text ? 'Text_SanSerif' : 'CheckBox'}_1`;
+    const field = document.getForm().getField(name);
+    const oldWidget = field.acroField.getWidgets()[0];
+    const detached = oldWidget.dict.clone(document.context);
+    detached.delete(PDFName.of('Parent'));
+    detached.set(PDFName.of('T'), PDFHexString.fromText(name));
+    detached.set(PDFName.of('FT'), PDFName.of(text ? 'Tx' : 'Btn'));
+    detached.set(PDFName.of('V'), text ? PDFHexString.fromText(value) : PDFName.of('Yes'));
+    if (!text) detached.set(PDFName.of('AS'), PDFName.of('Yes'));
+    const annotations = document.getPages()[0].node.Annots();
+    for (let index = 0; index < annotations.size(); index++) if (document.context.lookup(annotations.get(index)) === oldWidget.dict) annotations.set(index, document.context.register(detached));
+    const [record] = await extractPdf(await document.save({ updateFieldAppearances: false }));
+    expect(record.issues).toContainEqual(expect.objectContaining({ code: 'repeated-field', field: column, critical: true }));
+    expect(validateRecord(record).some(issue => issue.critical)).toBe(true);
+  });
   it('extrai nome, datas, sexo e três privilégios', async () => { const [r] = await extractPdf(await syntheticPdf([{ 8: true, 9: true, 10: true }])); expect(r.cells.slice(0, 3)).toEqual(['Marina', 'Vitória dos', 'Campos']); expect(r.cells[9]).toBe('2000-02-29'); expect(r.cells[19]).toBe('2018-08-17'); expect(r.cells[6]).toBe('F'); expect(r.cells.slice(20, 23)).toEqual(['TRUE', 'TRUE', 'TRUE']); });
   it('consolida duas páginas em uma pessoa', async () => { const records = await extractPdf(await syntheticPdf([{}, {}])); expect(records).toHaveLength(1); expect(records[0].sources).toHaveLength(2); });
   it('aceita widgets órfãos com V vazio e AS Off, conforme arquivo real', async () => { const [r] = await extractPdf(await syntheticPdf([{}, {}], { orphan: true })); expect(r.cells[6]).toBe('F'); expect(r.meta.checkboxes).toEqual({ 20: false, 21: false, 22: false }); expect(validateRecord(r).some(i => i.critical)).toBe(false); });

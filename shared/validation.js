@@ -20,6 +20,35 @@ export function splitName(value) {
 export function makeRecord(cells = emptyCells(), source = '') {
   return { id: globalThis.crypto.randomUUID(), cells: [...cells], sources: source ? [source] : [], issues: [], conflicts: [], meta: {}, reviewed: false };
 }
+export const identityFingerprint = record => JSON.stringify([normalizeName(fullName(record)), record.cells[9], record.cells[19]]);
+/** Recheck user edits without merging people or retaining stale separation approvals. */
+export function refreshDuplicateIssues(records, { confirmIds = [] } = {}) {
+  const confirmed = new Set(confirmIds);
+  const refreshed = records.map(record => ({ ...record, issues: (record.issues ?? []).filter(issue => issue.code !== 'duplicate'), meta: { ...record.meta } }));
+  const groups = new Map();
+  for (const record of refreshed) {
+    const name = normalizeName(fullName(record));
+    if (!name) continue;
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(record);
+  }
+  for (const group of groups.values()) {
+    const groupFingerprint = JSON.stringify(group.map(record => [record.id, identityFingerprint(record)]).sort(([a], [b]) => a.localeCompare(b)));
+    for (const record of group) {
+      if (confirmed.has(record.id)) {
+        record.meta.identityConfirmed = true;
+        record.meta.identityConfirmedGroup = groupFingerprint;
+      } else if (record.meta.identityConfirmedGroup !== groupFingerprint) {
+        record.meta.identityConfirmed = false;
+        delete record.meta.identityConfirmedGroup;
+      }
+    }
+    if (group.length > 1 && !group.every(record => record.meta.identityConfirmed && record.meta.identityConfirmedGroup === groupFingerprint)) {
+      for (const record of group) record.issues.push({ code: 'duplicate', critical: true, message: 'Nome coincidente com outro cadastro. Confirme que são pessoas diferentes ou consolide os registros.' });
+    }
+  }
+  return refreshed;
+}
 export function validateRecord(record) {
   const issues = (record.issues ?? []).filter(issue => !['required', 'date', 'gender-value', 'boolean', 'structure'].includes(issue.code) && !(record.reviewed && !issue.critical));
   const add = (code, message, field) => issues.push({ code, message, field, critical: true });

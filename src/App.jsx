@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CSV_HEADERS, FIELD_LABELS } from '../shared/schema.js';
-import { fullName, validateRecord } from '../shared/validation.js';
+import { fullName, validateRecord, refreshDuplicateIssues } from '../shared/validation.js';
 import { editRecordField } from '../shared/edit.js';
 import { mergeExisting, mergeRecords } from '../electron/services/consolidate.js';
 import Icon from './components/Icon.jsx';
@@ -153,15 +153,15 @@ export default function App() {
     finally { setProcessing(false); }
   };
   const requestStart = () => records.length ? setConfirmation({ title: 'Processar os arquivos novamente?', message: 'A revisão atual será substituída pelos dados dos arquivos selecionados. As alterações manuais desta sessão serão descartadas.', action: 'Processar novamente', run: start }) : start();
-  const update = record => { setRecords(current => current.map(item => item.id === record.id ? record : item)); setEditing(null); setSaved(null); };
-  const removeSelected = () => setConfirmation({ title: 'Excluir da exportação?', message: `Os ${selected.length} cadastros selecionados serão retirados desta sessão. Os PDFs e o CSV original não serão alterados.`, action: 'Excluir cadastros', run: () => { setExcluded(current => current + selected.length); setRecords(current => current.filter(record => !selected.includes(record.id))); setSelected([]); setSaved(null); } });
-  const keepSeparate = () => setConfirmation({ title: 'Confirmar pessoas diferentes?', message: 'Confirme que os cadastros selecionados representam pessoas diferentes. A pendência de possível duplicidade será removida somente destes registros.', action: 'Manter separados', run: () => { setRecords(current => current.map(record => selected.includes(record.id) ? { ...record, issues: record.issues.filter(issue => !isDuplicateIssue(issue)), meta: { ...record.meta, identityConfirmed: true } } : record)); setSelected([]); setSaved(null); } });
+  const update = record => { setRecords(current => refreshDuplicateIssues(current.map(item => item.id === record.id ? record : item))); setEditing(null); setSaved(null); };
+  const removeSelected = () => setConfirmation({ title: 'Excluir da exportação?', message: `Os ${selected.length} cadastros selecionados serão retirados desta sessão. Os PDFs e o CSV original não serão alterados.`, action: 'Excluir cadastros', run: () => { setExcluded(current => current + selected.length); setRecords(current => refreshDuplicateIssues(current.filter(record => !selected.includes(record.id)))); setSelected([]); setSaved(null); } });
+  const keepSeparate = () => setConfirmation({ title: 'Confirmar pessoas diferentes?', message: 'Confirme que os cadastros selecionados representam pessoas diferentes. Todos os cadastros do grupo precisam ser confirmados para liberar a exportação.', action: 'Manter separados', run: () => { setRecords(current => refreshDuplicateIssues(current, { confirmIds: selected })); setSelected([]); setSaved(null); } });
   const mergeSelected = () => setConfirmation({ title: 'Consolidar a mesma pessoa?', message: `Os ${selected.length} registros selecionados se tornarão um cadastro. Valores diferentes serão apresentados para escolha antes da exportação.`, action: 'Consolidar registros', run: () => {
     const toMerge = records.filter(record => selected.includes(record.id));
     const merged = toMerge.slice(1).reduce((left, right) => mergeRecords(left, right), toMerge[0]);
     merged.issues = merged.issues.filter(issue => !isDuplicateIssue(issue));
     merged.reviewed = false;
-    setRecords(current => [...current.filter(record => !selected.includes(record.id)), merged]);
+    setRecords(current => refreshDuplicateIssues([...current.filter(record => !selected.includes(record.id)), merged]));
     setDuplicates(current => current + toMerge.length - 1); setSelected([]); setEditing(merged.id); setSaved(null);
   } });
   const exportRows = () => safeAction(async () => {

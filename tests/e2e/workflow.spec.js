@@ -190,3 +190,13 @@ test('não anuncia sucesso quando a gravação falha', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('Não foi possível gravar o arquivo.');
   await expect(page.getByRole('heading', { name: 'CSV salvo e verificado.' })).toHaveCount(0);
 });
+
+test('edição que cria nome coincidente bloqueia nova duplicidade', async ({ page }) => {
+  const one = record('one'); const two = record('two', cells('Clara'));
+  await launch(page, { records: [one, two] }); await process(page);
+  await page.getByRole('button', { name: 'Editar Clara Aparecida dos Exemplo' }).click();
+  await page.getByLabel('Primeiro nome', { exact: true }).fill('Maria');
+  await page.getByRole('button', { name: 'Salvar revisão' }).click();
+  await page.getByRole('button', { name: 'Continuar para exportação' }).click();
+  await expect(page.getByRole('button', { name: 'Exportar CSV', exact: true })).toBeDisabled();
+});

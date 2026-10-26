@@ -17,6 +17,16 @@ function textValue(value) {
   return value instanceof PDFString || value instanceof PDFHexString ? value.decodeText() : '';
 }
 function nameValue(value) { return value instanceof PDFName ? value.decodeText() : ''; }
+function belongsToField(widget, field, context) {
+  const seen = new Set();
+  let current = widget;
+  while (current instanceof PDFDict && !seen.has(current)) {
+    if (current === field.acroField.dict) return true;
+    seen.add(current);
+    current = context.lookup(current.get(key('Parent')));
+  }
+  return false;
+}
 function checkbox(widget, context, canonical) {
   const value = nameValue(inherited(widget, 'V', context));
   const appearance = nameValue(widget.lookup(key('AS')));
@@ -38,7 +48,12 @@ export async function extractPdf(bytes, sourceName = 'PDF') {
   let document;
   try { document = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: true }); }
   catch { throw new Error('PDF inválido, corrompido ou protegido por senha.'); }
-  const canonical = new Map(document.getForm().getFields().map(field => [field.getName(), field]));
+  const canonical = new Map();
+  for (const field of document.getForm().getFields()) {
+    const name = field.getName();
+    if (!canonical.has(name)) canonical.set(name, []);
+    canonical.get(name).push(field);
+  }
   const records = []; let unsupportedPages = 0;
   for (const [pageIndex, page] of document.getPages().entries()) {
     const annotations = page.node.Annots();
@@ -52,12 +67,15 @@ export async function extractPdf(bytes, sourceName = 'PDF') {
       const number = +match[1];
       const type = nameValue(inherited(widget, 'FT', document.context));
       const text = [1, 2, 5].includes(number);
+      const namesakes = canonical.get(name) ?? [];
+      const related = namesakes.filter(field => belongsToField(widget, field, document.context));
+      if (related.length !== namesakes.length) fieldIssues.push({ code: 'repeated-field', critical: true, message: `Página ${pageIndex + 1}: campo da página e campo AcroForm homônimo são objetos sem vínculo. Confira o documento original.`, pdfField: number });
+      const direct = related.length === 1 ? related[0] : undefined;
       let value;
       if (text && type === 'Tx') {
-        const direct = canonical.get(name);
         value = direct instanceof PDFTextField ? direct.getText() ?? '' : textValue(inherited(widget, 'V', document.context));
       } else if (!text && type === 'Btn') {
-        const result = checkbox(widget, document.context, canonical.get(name)); value = result.state;
+        const result = checkbox(widget, document.context, direct); value = result.state;
         if (result.error) fieldIssues.push({ code: 'checkbox', critical: true, message: `Página ${pageIndex + 1}: ${result.error}`, pdfField: number });
       } else { value = text ? '' : null; fieldIssues.push({ code: 'field-type', critical: true, message: `Página ${pageIndex + 1}: tipo de campo incompatível.`, pdfField: number }); }
       if (fields.has(number) && fields.get(number) !== value) fieldIssues.push({ code: 'repeated-field', critical: true, message: 'Campos repetidos na página têm valores divergentes.', pdfField: number });
