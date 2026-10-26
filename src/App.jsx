@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CSV_HEADERS, FIELD_LABELS } from '../shared/schema.js';
 import { fullName, validateRecord } from '../shared/validation.js';
+import { editRecordField } from '../shared/edit.js';
 import { mergeExisting, mergeRecords } from '../electron/services/consolidate.js';
 import Icon from './components/Icon.jsx';
 import * as S from './styles/theme.js';
@@ -49,8 +50,8 @@ function RecordEditor({ record, onSave, onClose }) {
   const ref = useRef(null);
   useFocusScope(ref, onClose);
   const issues = recordIssues(draft);
-  const change = (field, value) => setDraft(current => ({ ...current, reviewed: false, cells: current.cells.map((cell, index) => index === field ? value : cell), issues: current.issues.filter(issue => issue.field !== field || isDuplicateIssue(issue)) }));
-  const resolve = (field, value) => setDraft(current => ({ ...current, reviewed: false, cells: current.cells.map((cell, index) => index === field ? value : cell), conflicts: current.conflicts.filter(conflict => conflict.field !== field), issues: current.issues.filter(issue => issue.field !== field || isDuplicateIssue(issue)) }));
+  const change = (field, value) => setDraft(current => editRecordField(current, field, value));
+  const resolve = (field, value) => setDraft(current => editRecordField(current, field, value, true));
   return <S.Overlay onClick={onClose}><S.Drawer role="dialog" aria-modal="true" aria-labelledby="editor-title" ref={ref} onClick={event => event.stopPropagation()}>
     <header><S.Spread><h2 id="editor-title">Revisar cadastro</h2><S.TextButton aria-label="Fechar editor" onClick={onClose}><Icon name="close" /></S.TextButton></S.Spread><p>{getName(record)}</p></header>
     <S.DrawerBody>
@@ -82,7 +83,7 @@ function ExtractedInfo({ meta }) {
   const labels = { otherSheep: 'Outras ovelhas', anointed: 'Ungido', specialPioneer: 'Pioneiro especial', missionary: 'Missionário' };
   return <div style={{ fontSize: 11, lineHeight: 1.7, color: '#687c5b' }}>
     {meta.originalName && <p style={{ marginTop: 12 }}>Nome completo no PDF: <strong>{meta.originalName}</strong></p>}
-    {Object.entries(meta.checkboxes || {}).map(([field, value]) => <div key={field}>{LABELS[Number(field)]}: {show(value)}</div>)}
+    {Object.entries(meta.originalCheckboxes || meta.checkboxes || {}).map(([field, value]) => <div key={field}>{LABELS[Number(field)]}: {show(value)}</div>)}
     {(meta.observations || []).map((observation, index) => <div key={index} style={{ marginTop: 12 }}><strong>Página {observation.page || index + 1}</strong>{Object.entries(labels).map(([field, label]) => <div key={field}>{label}: {show(observation[field])}</div>)}</div>)}
     {!meta.originalName && !meta.observations?.length && <p>Cadastro preservado do CSV existente.</p>}
   </div>;
